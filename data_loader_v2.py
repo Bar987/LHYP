@@ -1,11 +1,31 @@
 import pydicom as dicom
-from utils import get_logger
 from copy import deepcopy
 import numpy as np
 import pickle
 import os
 import sys
 import getopt
+import logging
+import time
+import functools
+
+def get_logger(name):
+    """
+    Returns an already configured logger for a specific module.
+    (This should be used instead of stdout.)
+    :param name: the name of the modeule where the logger is created
+    :return: a custom configured logger object
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler("hypertrophy.log", mode='a')
+    formatter = logging.Formatter('%(levelname)s - %(asctime)s - %(name)s -- %(msg)s')
+    handler.setFormatter(formatter)
+    handler.setLevel(logging.INFO)
+
+    logger.addHandler(handler)
+    return logger
+
 
 logger = get_logger(__name__)
 
@@ -305,6 +325,16 @@ class DataLoader:
         self.fileLocation = inputdir
         self.outputdir = outputdir
 
+    def normalize(self, img):
+        imin = img.min()
+        imax = img.max()
+
+        a = (255) / (imax - imin)
+        b = 255 - a * imax
+        new_img = (a * img + b).astype(np.uint8)
+        return np.array(new_img, dtype=np.uint8)
+
+
     def sort_cons(self, directory):
         cr = CONreaderVM(directory + '/sa/contours.con')
         dr = DCMreaderVM(directory + '/sa/images')
@@ -326,12 +356,16 @@ class DataLoader:
 
         images = []
 
-        for i in num:
-            for j in range(frm_num):
-                if(j % 2 == 0):
-                    images.append(dr.get_image(i, j))
+        for j in range(frm_num):
+            if(j % 2 == 0):
+                slices = []
 
-        return pathology, weight, height, gender, np.array(images, dtype=np.uint8)
+                for i in num:
+                    slices.append(self.normalize(dr.get_image(i, j)))
+                
+                images.append(np.stack(slices, axis=-1))
+
+        return pathology, weight, height, gender, np.array(images, dtype='uint8')
 
     def picklePatient(self, directory, id):
         pathology, weight, height, gender, images = self.sort_cons(directory)
