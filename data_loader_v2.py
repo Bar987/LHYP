@@ -30,12 +30,14 @@ def get_logger(name):
 logger = get_logger(__name__)
 
 class Patient:
-	def __init__(self, pathology, gender, weight, height, images):
+	def __init__(self, pathology, gender, weight, height, images, image_idxs, contours):
 		self.pathology = pathology 
 		self.gender = gender
 		self.weight = weight
 		self.height = height
 		self.images = images
+		self.image_idxs = image_idxs
+		self.contours = contours
 class DCMreaderVM:
 
     def __init__(self, folder_name):
@@ -338,6 +340,7 @@ class DataLoader:
     def sort_cons(self, directory):
         cr = CONreaderVM(directory + '/sa/contours.con')
         dr = DCMreaderVM(directory + '/sa/images')
+        all_contours = cr.get_hierarchical_contours()
         _, __, weight, height, gender = cr.get_volume_data()
 
         num = []
@@ -355,22 +358,25 @@ class DataLoader:
             pathology = meta.readline().split(' ')[1]
 
         images = []
+        fr_slc = {}
 
         for j in range(frm_num):
             if(j % 2 == 0):
                 slices = []
-
+                slice_idx = []
                 for i in num:
                     slices.append(self.normalize(dr.get_image(i, j)))
-                
-                images.append(np.stack(slices, axis=-1))
+                    slice_idx.append(i)
 
-        return pathology, weight, height, gender, np.array(images, dtype='uint8')
+                images.append(np.stack(slices, axis=-1))
+                fr_slc[j] = slice_idx
+
+        return pathology, weight, height, gender, np.array(images, dtype='uint8'), fr_slc, all_contours
 
     def picklePatient(self, directory, id):
-        pathology, weight, height, gender, images = self.sort_cons(directory)
+        pathology, weight, height, gender, images, image_idxs, contours = self.sort_cons(directory)
 
-        patient = Patient(pathology, gender, weight, height, images)
+        patient = Patient(pathology, gender, weight, height, images, image_idxs, contours)
 
         output = self.outputdir + '/' + str(directory.split('/')[-1])
         with open(output, 'wb') as outfile:
